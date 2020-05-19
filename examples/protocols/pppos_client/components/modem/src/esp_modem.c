@@ -81,7 +81,6 @@ ESP_EVENT_DEFINE_BASE(ESP_MODEM_EVENT);
 typedef struct {
     uart_port_t uart_port;                  /*!< UART port */
     uint8_t *buffer;                        /*!< Internal buffer to store response lines/data from DCE */
-		uint8_t cmux_frame_tail;								/*!< Size of CMUX frame tail */
     QueueHandle_t event_queue;              /*!< UART event queue handle */
     esp_event_loop_handle_t event_loop_hdl; /*!< Event loop handle */
     TaskHandle_t uart_event_task_hdl;       /*!< UART event task handle */
@@ -141,15 +140,18 @@ static esp_err_t esp_dte_handle_cmux_frame(esp_modem_dte_t *esp_dte, int32_t buf
     modem_dce_t *dce = esp_dte->parent.dce;
     MODEM_CHECK(dce, "DTE has not yet bind with DCE", err);
 		char *frame = (char *)(esp_dte->buffer);
-		if (esp_dte->cmux_frame_tail > 0)
-			frame += esp_dte->cmux_frame_tail + 2;
-		esp_dte->cmux_frame_tail = 0;
 		while (buf_length > 5)
 		{
 			uint8_t dlci = frame[1] >> 2;
 			uint8_t type = frame[2];
 			uint8_t length = frame[3] >> 1;
 			ESP_LOGD(MODEM_TAG, "CMUX FR: A:%02x T:%02x L:%d Buf:%d", dlci, type, length, buf_length);
+			while (length + 6 > buf_length)
+			{
+				ESP_LOGW(MODEM_TAG, "Frame length %d, buffer %d, reading additional %d", length, buf_length, length + 6 - buf_length);
+				buf_length += uart_read_bytes(esp_dte->uart_port, (uint8_t *)&frame[buf_length], length + 6 - buf_length, pdMS_TO_TICKS(100));
+				ESP_LOGW(MODEM_TAG, "Final buffer %d", buf_length);
+			}
 			if (dce->handle_cmux_frame != NULL)
 				MODEM_CHECK(dce->handle_cmux_frame(dce, frame) == ESP_OK, "handle cmux frame failed", err_handle);
 			else if ((type == FT_UIH && dce->handle_line != NULL) && \
@@ -166,13 +168,7 @@ static esp_err_t esp_dte_handle_cmux_frame(esp_modem_dte_t *esp_dte, int32_t buf
 			} else if (type == FT_UIH && length && dlci == 1 && esp_dte->receive_cb != NULL)
 			{
 				ESP_LOGD(MODEM_TAG, "Pass data from DLCI: %d to receive_cb", dlci);
-				if (buf_length + 6 >= length)
-					esp_dte->receive_cb(&frame[4], length, esp_dte->receive_cb_ctx);
-				else
-				{
-					esp_dte->receive_cb(&frame[4], buf_length - 4, esp_dte->receive_cb_ctx);
-					esp_dte->cmux_frame_tail = length - (buf_length - 4);
-				}
+				esp_dte->receive_cb(&frame[4], length, esp_dte->receive_cb_ctx);
 			}
 			frame += length + 6;
 			buf_length -= length + 6;
@@ -239,26 +235,11 @@ static void esp_handle_uart_data(esp_modem_dte_t *esp_dte)
 				for (uint8_t i = 0; i < length; i++)
 					printf("%02x ", esp_dte->buffer[i]);
 				printf("\n");*/
-        if (esp_dte->buffer[0] == SOF_MARKER && esp_dte->cmux_frame_tail == 0)
+        if (esp_dte->buffer[0] == SOF_MARKER)
         {
           esp_dte_handle_cmux_frame(esp_dte, length);
           return;
-        } else if (esp_dte->cmux_frame_tail > 0)
-				{
-					ESP_LOGD(MODEM_TAG, "Have tail: %d", esp_dte->cmux_frame_tail);
-					if (length <= esp_dte->cmux_frame_tail)
-					{
-						esp_dte->receive_cb(esp_dte->buffer, length, esp_dte->receive_cb_ctx);
-						esp_dte->cmux_frame_tail -= length;
-						return;
-					}
-					else
-					{
-						esp_dte->receive_cb(esp_dte->buffer, esp_dte->cmux_frame_tail, esp_dte->receive_cb_ctx);
-						esp_dte_handle_cmux_frame(esp_dte, length - esp_dte->cmux_frame_tail - 2);
-						return;
-					}
-				}
+        }
         esp_dte->receive_cb(esp_dte->buffer, length, esp_dte->receive_cb_ctx);
     }
 }
