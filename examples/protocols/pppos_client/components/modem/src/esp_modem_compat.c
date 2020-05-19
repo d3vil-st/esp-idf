@@ -88,7 +88,7 @@ esp_err_t esp_modem_setup_ppp(modem_dte_t *dte)
     // event loop has to be created when using this API -- create and ignore failure if already created
     esp_event_loop_create_default();
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, &on_ip_event, NULL));
-    esp_netif_ppp_set_auth(esp_netif, auth_type, CONFIG_EXAMPLE_MODEM_PPP_AUTH_USERNAME, CONFIG_EXAMPLE_MODEM_PPP_AUTH_PASSWORD);
+    esp_netif_ppp_set_auth(esp_netif, auth_type, CONFIG_MODEM_PPP_AUTH_USERNAME, CONFIG_MODEM_PPP_AUTH_PASSWORD);
     void *modem_netif_adapter = esp_modem_netif_setup(dte);
     esp_modem_netif_set_default_handlers(modem_netif_adapter, esp_netif);
     /* attach the modem to the network interface */

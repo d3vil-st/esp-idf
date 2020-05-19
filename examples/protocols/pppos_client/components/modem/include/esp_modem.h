@@ -50,6 +50,7 @@ typedef struct {
     uart_parity_t parity;           /*!< Parity type */
     modem_flow_ctrl_t flow_control; /*!< Flow control type */
     uint32_t baud_rate;             /*!< Communication baud rate */
+    bool cmux;
 } esp_modem_dte_config_t;
 
 /**
@@ -62,14 +63,15 @@ typedef esp_err_t (*esp_modem_on_receive)(void *buffer, size_t len, void *contex
  * @brief ESP Modem DTE Default Configuration
  *
  */
-#define ESP_MODEM_DTE_DEFAULT_CONFIG()          \
-    {                                           \
-        .port_num = UART_NUM_1,                 \
-        .data_bits = UART_DATA_8_BITS,          \
-        .stop_bits = UART_STOP_BITS_1,          \
-        .parity = UART_PARITY_DISABLE,          \
-        .baud_rate = 115200,                    \
-        .flow_control = MODEM_FLOW_CONTROL_NONE \
+#define ESP_MODEM_DTE_DEFAULT_CONFIG()           \
+    {                                            \
+        .port_num = UART_NUM_1,                  \
+        .data_bits = UART_DATA_8_BITS,           \
+        .stop_bits = UART_STOP_BITS_1,           \
+        .parity = UART_PARITY_DISABLE,           \
+        .baud_rate = 115200,                     \
+        .flow_control = MODEM_FLOW_CONTROL_NONE, \
+        .cmux = true,                            \
     }
 
 /**
